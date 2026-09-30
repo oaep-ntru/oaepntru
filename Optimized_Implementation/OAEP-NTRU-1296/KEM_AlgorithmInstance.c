@@ -171,7 +171,7 @@ int kem_enc(
 
 	poly_ntt(&p_t, &p_t);
 
-	poly_frombytes(&p_h, pk);
+	fail |= poly_frombytes(&p_h, pk);
 
 	hash_f(buff, pk);
 
@@ -213,9 +213,9 @@ int kem_dec(
 	poly p_tmp;
 
 
-	poly_frombytes(&p_c, ct);
-	poly_frombytes(&p_f, sk);
-	poly_frombytes(&p_hinv, sk + NTRUOAEP_POLYBYTES);
+	fail |= poly_frombytes(&p_c, ct);
+	fail |= poly_frombytes(&p_f, sk);
+	fail |= poly_frombytes(&p_hinv, sk + NTRUOAEP_POLYBYTES);
 
 
 	poly_basemul(&p_tmp, &p_c, &p_f);
@@ -250,7 +250,11 @@ int kem_dec(
 		fail |= (ct[i] ^ sigma[i - NTRUOAEP_POLYBYTES]);
 	}
 
-	memcpy(ss, sigma + NTRUOAEP_SYMBYTES, NTRUOAEP_SSBYTES);
+	if (!fail) {
+		memcpy(ss, sigma + NTRUOAEP_SYMBYTES, NTRUOAEP_SSBYTES);
+	} else {
+		memset(ss, 0, NTRUOAEP_SSBYTES);
+	}
 
 	*ss_len_bytes = NTRUOAEP_SSBYTES;
 

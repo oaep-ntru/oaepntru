@@ -147,8 +147,9 @@ void poly_tobytes_avx2(uint8_t r[restrict NTRUOAEP_POLYBYTES],
 	}
 }
 
-static inline void poly_frombytes_unpack8(int16_t *r, const uint8_t *a)
+static inline int poly_frombytes_unpack8(int16_t *r, const uint8_t *a)
 {
+	unsigned int fail = 0;
 	r[0] = a[0] | (((int16_t)a[1] & 0x1f) << 8);
 	r[1] = (a[1] >> 5) | ((int16_t)a[2] << 3) | (((int16_t)a[3] & 0x03) << 11);
 	r[2] = (a[3] >> 2) | (((int16_t)a[4] & 0x7f) << 6);
@@ -157,6 +158,11 @@ static inline void poly_frombytes_unpack8(int16_t *r, const uint8_t *a)
 	r[5] = (a[8] >> 1) | (((int16_t)a[9] & 0x3f) << 7);
 	r[6] = (a[9] >> 6) | ((int16_t)a[10] << 2) | (((int16_t)a[11] & 0x07) << 10);
 	r[7] = (a[11] >> 3) | ((int16_t)a[12] << 5);
+
+	for (int j = 0; j < 8; j++) {
+		fail |= (unsigned int)(r[j] >= NTRUOAEP_Q);
+	}
+	return (int)fail;
 }
 
 static inline __m128i pack_8x32_to_8x16(__m256i a)
@@ -165,7 +171,7 @@ static inline __m128i pack_8x32_to_8x16(__m256i a)
 		_mm256_packs_epi32(a, a), 0x08));
 }
 
-static inline void poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
+static inline __m256i poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
 {
 	const __m256i shuf = _mm256_setr_epi8(
 		0, 1, 2, 3, 1, 2, 3, 4, 3, 4, 5, 6, 4, 5, 6, 7,
@@ -178,11 +184,14 @@ static inline void poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
 		_mm256_srlv_epi32(_mm256_shuffle_epi8(in, shuf), shifts), mask);
 
 	_mm_storeu_si128((__m128i *)r, pack_8x32_to_8x16(coeffs));
+	return _mm256_cmpgt_epi32(coeffs, _mm256_set1_epi32(NTRUOAEP_Q - 1));
 }
 
-void poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
+int poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
                          const uint8_t a[restrict NTRUOAEP_POLYBYTES])
 {
+	__m256i fail = _mm256_setzero_si256();
+	int fail_tail = 0;
 	int block;
 
 	for(block = 0; block < NTRUOAEP_N / 8 - 1; block += 8)
@@ -190,18 +199,20 @@ void poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
 		const uint8_t *ai = a + 13 * block;
 		int16_t *ri = r + 8 * block;
 
-		poly_frombytes_unpack8_avx2(ri, ai);
-		poly_frombytes_unpack8_avx2(ri + 8, ai + 13);
-		poly_frombytes_unpack8_avx2(ri + 16, ai + 26);
-		poly_frombytes_unpack8_avx2(ri + 24, ai + 39);
-		poly_frombytes_unpack8_avx2(ri + 32, ai + 52);
-		poly_frombytes_unpack8_avx2(ri + 40, ai + 65);
-		poly_frombytes_unpack8_avx2(ri + 48, ai + 78);
-		poly_frombytes_unpack8_avx2(ri + 56, ai + 91);
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri, ai));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 8, ai + 13));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 16, ai + 26));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 24, ai + 39));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 32, ai + 52));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 40, ai + 65));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 48, ai + 78));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 56, ai + 91));
 	}
 
 	for(; block < NTRUOAEP_N / 8; block++)
-		poly_frombytes_unpack8(r + 8 * block, a + 13 * block);
+		fail_tail |= poly_frombytes_unpack8(r + 8 * block, a + 13 * block);
+
+	return (_mm256_movemask_epi8(fail) != 0) | fail_tail;
 }
 
 

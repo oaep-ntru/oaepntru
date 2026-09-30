@@ -120,7 +120,7 @@ static inline __m128i pack_8x32_to_8x16(__m256i a)
 		_mm256_packs_epi32(a, a), 0x08));
 }
 
-static inline void poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
+static inline __m256i poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
 {
 	const __m256i shuf = _mm256_setr_epi8(
 		0, 1, 2, 3, 1, 2, 3, 4, 3, 4, 5, 6, 5, 6, 7, 8,
@@ -136,11 +136,13 @@ static inline void poly_frombytes_unpack8_avx2(int16_t *r, const uint8_t *a)
 		_mm256_srlv_epi32(_mm256_shuffle_epi8(in, shuf), shifts), mask);
 
 	_mm_storeu_si128((__m128i *)r, pack_8x32_to_8x16(coeffs));
+	return _mm256_cmpgt_epi32(coeffs, _mm256_set1_epi32(NTRUOAEP_Q - 1));
 }
 
-void poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
+int poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
                          const uint8_t a[restrict NTRUOAEP_POLYBYTES])
 {
+	__m256i fail = _mm256_setzero_si256();
 	int block;
 
 	for(block = 0; block < POLY_SERIAL_UNROLLED_BLOCKS; block += 8)
@@ -148,19 +150,21 @@ void poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
 		const uint8_t *ai = a + POLY_SERIAL_BYTES_PER_BLOCK * block;
 		int16_t *ri = r + 8 * block;
 
-		poly_frombytes_unpack8_avx2(ri, ai);
-		poly_frombytes_unpack8_avx2(ri + 8, ai + POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 16, ai + 2 * POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 24, ai + 3 * POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 32, ai + 4 * POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 40, ai + 5 * POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 48, ai + 6 * POLY_SERIAL_BYTES_PER_BLOCK);
-		poly_frombytes_unpack8_avx2(ri + 56, ai + 7 * POLY_SERIAL_BYTES_PER_BLOCK);
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri, ai));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 8, ai + POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 16, ai + 2 * POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 24, ai + 3 * POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 32, ai + 4 * POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 40, ai + 5 * POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 48, ai + 6 * POLY_SERIAL_BYTES_PER_BLOCK));
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(ri + 56, ai + 7 * POLY_SERIAL_BYTES_PER_BLOCK));
 	}
 
 	for(; block < POLY_SERIAL_BLOCKS; block++)
-		poly_frombytes_unpack8_avx2(r + 8 * block,
-		                            a + POLY_SERIAL_BYTES_PER_BLOCK * block);
+		fail = _mm256_or_si256(fail, poly_frombytes_unpack8_avx2(r + 8 * block,
+		                            a + POLY_SERIAL_BYTES_PER_BLOCK * block));
+
+	return _mm256_movemask_epi8(fail) != 0;
 }
 
 #define CBD1_GROUPS (NTRUOAEP_N / 256)

@@ -6,7 +6,7 @@
 
 void poly_tobytes_avx2(uint8_t r[restrict NTRUOAEP_POLYBYTES],
                        const int16_t a[restrict NTRUOAEP_N]);
-void poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
+int poly_frombytes_avx2(int16_t r[restrict NTRUOAEP_N],
                          const uint8_t a[restrict NTRUOAEP_POLYBYTES]);
 void poly_cbd1_avx2(int16_t r[NTRUOAEP_N], const uint8_t buf[NTRUOAEP_N / 4]);
 int poly_cbd1_inv_avx2(uint8_t *w, const int16_t a[NTRUOAEP_N],
