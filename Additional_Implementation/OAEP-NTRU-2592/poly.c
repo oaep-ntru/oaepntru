@@ -97,12 +97,15 @@ void poly_tobytes(uint8_t r[NTRUOAEP_POLYBYTES], const poly *a)
 * Description: De-serialization of a polynomial;
 *              inverse of poly_tobytes
 *
+* Returns:     0 for canonical input, 1 if any encoded coefficient is >= q.
+*
 * Arguments:   - poly *r:          pointer to output polynomial
 *              - const uint8_t *a: pointer to input byte array
 *                                  (of NTRUOAEP_POLYBYTES bytes)
 **************************************************/
-void poly_frombytes(poly *r, const uint8_t a[NTRUOAEP_POLYBYTES])
+int poly_frombytes(poly *r, const uint8_t a[NTRUOAEP_POLYBYTES])
 {
+	unsigned int fail = 0;
     uint8_t t[15];
 
 	for (int i = 0; i < NTRUOAEP_N / 8; i++) {
@@ -118,7 +121,13 @@ void poly_frombytes(poly *r, const uint8_t a[NTRUOAEP_POLYBYTES])
 		r->coeffs[8 * i + 5] = (int16_t)(t[9] >> 3)  | ((int16_t)t[10] << 5)  | (((int16_t)t[11] & 0x03) << 13);
 		r->coeffs[8 * i + 6] = (int16_t)(t[11] >> 2) | ((int16_t)t[12] << 6)  | (((int16_t)t[13] & 0x01) << 14);
 		r->coeffs[8 * i + 7] = (int16_t)(t[13] >> 1) | ((int16_t)t[14] << 7);
+
+		for (int j = 0; j < 8; j++) {
+			fail |= (unsigned int)(r->coeffs[8*i + j] >= NTRUOAEP_Q);
+		}
 	}
+
+	return (int)fail;
 }
 
 

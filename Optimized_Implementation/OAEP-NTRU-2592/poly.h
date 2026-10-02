@@ -13,7 +13,7 @@ typedef struct{
 } poly;
 
 void poly_tobytes(uint8_t r[NTRUOAEP_POLYBYTES], const poly *a);
-void poly_frombytes(poly *r, const uint8_t a[NTRUOAEP_POLYBYTES]);
+int poly_frombytes(poly *r, const uint8_t a[NTRUOAEP_POLYBYTES]);
 
 void poly_cbd1(poly *r, const uint8_t buf[NTRUOAEP_N/4]);
 int poly_cbd1_inv(uint8_t *w, const poly *a, const uint8_t buf[NTRUOAEP_N/8]);
